@@ -1,6 +1,156 @@
 # Code Review
 
-Run every pass below, in order. One pass at a time, to completion, with its own commit — its own findings, its own test run, its own labelled commit — before starting the next.
+Run every pass below, in order. One pass at a time, to completion, with its own individual commit — its own findings, its own test run, and its own labelled commit — before starting the next.
+
+## Mandatory Commit Discipline
+
+**Every pass MUST result in exactly one individual commit. No exceptions.**
+
+This requirement applies even when:
+
+- the pass finds no bugs;
+- the pass makes no code changes;
+- the pass is not applicable;
+- the pass only produces findings that are deliberately deferred;
+- the pass only produces a comment documenting an observation, investigation, or conclusion;
+- the pass determines that an existing implementation is correct;
+- the pass produces only tests or review artifacts;
+- the pass is stopped early by a gate.
+
+**Do not skip a commit because there is "nothing to commit." There must still be a commit recording the completion and result of the pass.**
+
+If a pass produces no source-code change, create a minimal review artifact in the repository — for example:
+
+```text
+docs/review/REVIEW-<n>-<slug>.md
+```
+
+The artifact must contain:
+
+- what the pass examined;
+- what was found;
+- what was not found;
+- the evidence supporting the conclusion;
+- the disposition of each finding;
+- tests/checks that were run;
+- anything deliberately deferred to a later pass.
+
+**Never use an empty commit as a substitute for the review artifact.** The commit should leave behind a durable record of what happened during the pass.
+
+### Commit Ordering Is Mandatory
+
+The following sequence is required for **every** pass:
+
+1. Start the pass.
+2. Perform the pass completely.
+3. Run the required tests/checks.
+4. Record all findings and dispositions.
+5. Make only the changes permitted by that pass.
+6. Run the required post-change tests/checks.
+7. Create the pass's review artifact if necessary.
+8. Create **exactly one commit for that pass**.
+9. Verify the commit exists and contains only that pass's work.
+10. **Only then may the next pass begin.**
+
+Do not begin pass `N+1` while pass `N` has uncommitted work.
+
+Do not accumulate changes from multiple passes and commit them together.
+
+Do not amend a previous pass's commit with findings or fixes discovered during a later pass. If a later pass discovers something that belongs to an earlier pass, record it as a finding in the current pass and follow its disposition rules.
+
+### No Skipping
+
+**Every listed pass must be executed and committed.**
+
+A pass may be:
+
+- `PASS` — reviewed and no blocking findings remain;
+- `N/A` — the pass genuinely does not apply;
+- `DEFERRED` — a finding is intentionally left for a later pass, with the reason documented;
+- `RETURN` — a gate requires the review to stop.
+
+None of these statuses permits skipping the commit.
+
+For example, this is valid:
+
+```text
+[REVIEW-7][accuracy] N/A — no numeric logic is present in this change.
+```
+
+That still requires a commit documenting that determination.
+
+This is also valid:
+
+```text
+[REVIEW-3][scale-honesty] No findings.
+Expected production N: unknown; no production volume data was supplied.
+Checked all collection construction and external-call loops.
+```
+
+That still requires a commit.
+
+This is **not** valid:
+
+```text
+Pass 3 doesn't seem relevant, so skip it.
+```
+
+### Findings Must Not Be Lost
+
+If a pass produces even a single observation, it must be recorded.
+
+A finding does **not** need to result in a code change.
+
+For example:
+
+```text
+Finding:
+`foo.py:142` performs an unbounded read.
+
+Disposition:
+Deferred to Pass 9 because the current pass is restricted to
+scale analysis and changing the data-loading abstraction would
+constitute a structural simplification.
+
+Commit:
+[REVIEW-3][scale-honesty] Document unbounded export read
+```
+
+Likewise, if the conclusion is that something is correct, document the evidence:
+
+```text
+Finding:
+None.
+
+Evidence:
+`foo.py:142-168` was traced for empty, single-item, and
+10,000-item inputs. The collection is paginated before being
+materialized.
+
+Commit:
+[REVIEW-3][scale-honesty] Record scale review
+```
+
+### Commit Isolation
+
+Each commit must represent **one and only one pass**.
+
+Do not:
+
+- fix a Pass 6 finding during Pass 3;
+- include Pass 4 changes in the Pass 3 commit;
+- combine two passes because their changes touch the same files;
+- squash the review commits afterward;
+- amend an earlier review commit with later findings;
+- hide review findings exclusively in the final report.
+
+The Git history itself must tell the story of the review:
+
+```text
+REVIEW-1 → REVIEW-2 → REVIEW-3 → REVIEW-4 → ... → REVIEW-10
+```
+
+A reviewer must be able to inspect any individual `REVIEW-n` commit and determine exactly what happened during that pass.
 
 Do not merge two passes into one commit. Do not fix something out of turn: if pass 3 makes you notice a boundary bug, write it down and handle it in pass 6.
 
@@ -24,7 +174,7 @@ If a pass changes nothing, commit nothing — but still report the pass and its 
 - Every finding gets a **disposition**: fixed, deferred with a reason, or rejected with a reason.
 - Never fix and refactor in the same commit.
 - Run the tests before and after each pass.
-- **Stop early and say so** if a pass invalidates the whole approach — a criterion that can't be implemented as designed, an operation that fundamentally can't be made idempotent. Reviewing seven more passes of code that's about to be rewritten buries the finding that mattered.
+- **Stop early and say so** if a pass invalidates the whole approach — a criterion that can't be implemented as designed, an operation that fundamentally can't be made idempotent. Reviewing seven more passes of code that's about to be rewritten buries the finding that mattered. The stopping pass must still produce its required individual commit, documenting the reason for the stop and which subsequent passes were not executed.
 
 ---
 
@@ -299,12 +449,12 @@ For each pass: the findings, their disposition, and the commit. Both gates need 
 [REVIEW-1][readability]   GATE: PASS. Summary wrong about retry scope. 4 renames, 2 why-comments.  <sha>
 [REVIEW-2][acceptance]    3 findings, 3 fixed.  <sha>
 [REVIEW-3][scale-honesty] N+1 on export, fixed. Honesty: clean.  <sha>
-[REVIEW-4][survivability] No findings. Verified by re-running from a killed state.
+[REVIEW-4][survivability] No findings. Verified by re-running from a killed state.  <sha>
 [REVIEW-5][empirical]     N+1 under 50k rows, cap at the boundary. Both held. Regression test added.  <sha>
 [REVIEW-6][boundaries]    Cap enforced one batch late. Fixed.  <sha>
-[REVIEW-7][accuracy]      Deferred — no numeric logic in this change.
+[REVIEW-7][accuracy]      N/A — no numeric logic in this change.  <sha>
 [REVIEW-8][cost]          $0.11/run, ~$340/mo at 100k runs. Embedding calls batched 1→50.  <sha>
-[REVIEW-A][security]      Not applicable — no auth, parsing, or query changes.
+[REVIEW-A][security]      N/A — no auth, parsing, or query changes.  <sha>
 [REVIEW-9][simplicity]    Deleted RetryPolicy (one impl, one caller).  <sha>
 [REVIEW-10][tests]        GATE: PASS. Diff coverage 100% (47/47 lines, 12/12 branches). Mutated 6, all caught.  <sha>
 ```
