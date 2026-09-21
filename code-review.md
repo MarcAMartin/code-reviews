@@ -22,8 +22,16 @@ This requirement applies even when:
 If a pass produces no source-code change, create a minimal review artifact in the repository — for example:
 
 ```text
-docs/review/REVIEW-<n>-<slug>.md
+docs/review/{PR_NAME}/REVIEW-<n>-<slug>.md
 ```
+
+`{PR_NAME}` is the PR's canonical name or identifier and MUST be resolved before the first review commit is created. All review artifacts for the entire review MUST live under the same PR-specific directory:
+
+```text
+docs/review/{PR_NAME}/
+```
+
+Do not place review artifacts directly under `docs/review/`.
 
 The artifact must contain:
 
