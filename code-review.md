@@ -147,7 +147,7 @@ Do not:
 The Git history itself must tell the story of the review:
 
 ```text
-REVIEW-1 → REVIEW-2 → REVIEW-3 → REVIEW-4 → ... → REVIEW-10
+REVIEW-1 → REVIEW-2 → REVIEW-3 → REVIEW-4 → ... → REVIEW-11
 ```
 
 A reviewer must be able to inspect any individual `REVIEW-n` commit and determine exactly what happened during that pass.
@@ -353,7 +353,114 @@ The second arithmetic pass — pass 7 checks the numbers the code produces, this
 
 ---
 
-## Pass 9 — Simplicity · `[REVIEW-9][simplicity]`
+## Pass 9 — Reusability and Standards · `[REVIEW-9][reusability]`
+
+*Before adding a new abstraction, utility, helper, pattern, or dependency, did you first look for an existing standard, function, component, or established pattern that should be reused?*
+
+This pass exists to prevent the codebase from accumulating multiple ways to solve the same problem. **Our existing standards and functions take priority over inventing a new implementation.** A new abstraction is justified only when the existing one cannot reasonably satisfy the requirement.
+
+### Repository-First Reuse
+
+Before creating something new:
+
+- Search the repository for an existing function, helper, service, utility, component, hook, module, abstraction, or pattern that already solves the problem.
+- Check the project's established conventions and standards before choosing an implementation.
+- Prefer an existing internal function over writing an equivalent local implementation.
+- Prefer an existing shared abstraction over creating a one-off helper.
+- Prefer the project's existing libraries and dependencies over adding another dependency that provides overlapping functionality.
+- Follow existing naming, error-handling, logging, validation, configuration, and data-access conventions.
+- Check nearby code and analogous implementations, not just exact name matches. The right reusable pattern may have a different name.
+- Search for existing tests before adding new test utilities or fixtures.
+- If an existing function is close but insufficient, determine whether it should be extended rather than duplicated.
+- Do not create a new abstraction merely because the existing one has a slightly different interface or requires a small adapter.
+- If a new abstraction is genuinely necessary, document why the existing standard or function could not be reused.
+
+### Duplication
+
+Look specifically for:
+
+- New code duplicating an existing utility.
+- Reimplemented validation that already exists elsewhere.
+- Repeated API, database, HTTP, retry, logging, parsing, formatting, or error-handling logic.
+- Multiple implementations of the same business rule.
+- New constants or configuration values that duplicate existing ones.
+- New wrappers around a dependency already wrapped by an internal standard.
+- A new helper whose behavior substantially overlaps an existing helper.
+- New test setup that duplicates existing fixtures, factories, builders, or harnesses.
+- A new dependency introduced solely to perform work the codebase already supports.
+
+### Standards Take Priority
+
+If the repository has an established standard, use it unless there is a documented reason not to.
+
+Examples:
+
+```text
+Existing validation utility
+        ↓
+Use it
+
+Existing date/time utility
+        ↓
+Use it
+
+Existing API client
+        ↓
+Use it
+
+Existing logging abstraction
+        ↓
+Use it
+
+Existing error type / error handler
+        ↓
+Use it
+
+Existing database/repository pattern
+        ↓
+Use it
+```
+
+Do not introduce a competing implementation simply because it is personally preferred, more familiar, or easier to write locally.
+
+### Produce
+
+For every new function, helper, abstraction, dependency, or pattern introduced by the change, record:
+
+```text
+New thing:
+<name and location>
+
+Existing alternatives searched:
+<functions, utilities, modules, standards, or patterns examined>
+
+Why they were not reused:
+<specific reason>
+
+Decision:
+<reused / extended / adapted / intentionally new>
+
+Evidence:
+<searches or references supporting the decision>
+```
+
+If nothing new was introduced:
+
+```text
+Result:
+No new abstractions or overlapping implementations.
+
+Repository reuse:
+<what existing standards/functions were used>
+```
+
+A finding is required when a new implementation duplicates an existing capability without a documented reason.
+
+**Behavior-preserving reuse is preferred.** If reusing or extending an existing function would require a behavior change, record that as a finding and defer the behavior change to the appropriate pass rather than quietly changing the shared implementation here.
+
+---
+
+## Pass 10 — Simplicity · `[REVIEW-10][simplicity]`
 
 *What can be deleted?*
 
@@ -373,7 +480,7 @@ Behavior-preserving. Tests pass unchanged. If a test has to change, it isn't a s
 
 ---
 
-## Pass 10 — Test Quality and Diff Coverage · `[REVIEW-10][tests]`
+## Pass 11 — Test Quality and Diff Coverage · `[REVIEW-11][tests]`
 
 *Is every touched line covered — and does any of those tests actually check anything?*
 
@@ -407,13 +514,13 @@ Uncovered lines need a written exception, one per line. "Hard to test" is not an
 
 **Produce:** the diff-coverage number with every uncovered line named, plus the mutation results — which lines you broke and whether a test caught each.
 
-This pass gates too. If a touched line is uncovered without a written exception, or a mutated line survived without turning a test red, the change is not reviewed — however clean passes 1–9 were.
+This pass gates too. If a touched line is uncovered without a written exception, or a mutated line survived without turning a test red, the change is not reviewed — however clean passes 1–10 were.
 
 ---
 
 ## Situational passes
 
-Run these when they apply, before pass 10.
+Run these when they apply, before pass 11.
 
 ### `[REVIEW-A][security]`
 
@@ -455,6 +562,7 @@ For each pass: the findings, their disposition, and the commit. Both gates need 
 [REVIEW-7][accuracy]      N/A — no numeric logic in this change.  <sha>
 [REVIEW-8][cost]          $0.11/run, ~$340/mo at 100k runs. Embedding calls batched 1→50.  <sha>
 [REVIEW-A][security]      N/A — no auth, parsing, or query changes.  <sha>
-[REVIEW-9][simplicity]    Deleted RetryPolicy (one impl, one caller).  <sha>
-[REVIEW-10][tests]        GATE: PASS. Diff coverage 100% (47/47 lines, 12/12 branches). Mutated 6, all caught.  <sha>
+[REVIEW-9][reusability]  Reused existing RetryPolicy rather than adding a duplicate.  <sha>
+[REVIEW-10][simplicity]  Deleted unused abstraction (one impl, one caller).  <sha>
+[REVIEW-11][tests]        GATE: PASS. Diff coverage 100% (47/47 lines, 12/12 branches). Mutated 6, all caught.  <sha>
 ```
