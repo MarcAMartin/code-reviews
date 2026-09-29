@@ -14,36 +14,32 @@ This requirement applies even when:
 - the pass only produces findings that are deliberately deferred;
 - the pass only produces a comment documenting an observation, investigation, or conclusion;
 - the pass determines that an existing implementation is correct;
-- the pass produces only tests or review artifacts;
+- the pass produces only tests;
 - the pass is stopped early by a gate.
 
 **Do not skip a commit because there is "nothing to commit." There must still be a commit recording the completion and result of the pass.**
 
-If a pass produces no source-code change, create a minimal review artifact in the repository — for example:
+**The commit message is the record.** Do not write review documents into the repository — no `docs/review/`, no `REVIEW-n.md`, no report file. A file duplicating the commit message is a second copy to keep in sync, it detaches from the change the moment anyone cherry-picks or rebases, and it goes stale against the diff sitting next to it. `git log <base>..HEAD` is the review.
 
-```text
-docs/review/{PR_NAME}/REVIEW-<n>-<slug>.md
+If a pass produces no source-code change, commit anyway:
+
+```bash
+git commit --allow-empty -F -
 ```
 
-`{PR_NAME}` is the PR's canonical name or identifier and MUST be resolved before the first review commit is created. All review artifacts for the entire review MUST live under the same PR-specific directory:
+An empty commit is the correct mechanism here, not a loophole — the message is the deliverable, and there is nothing else the pass needed to leave behind.
 
-```text
-docs/review/{PR_NAME}/
-```
-
-Do not place review artifacts directly under `docs/review/`.
-
-The artifact must contain:
+Whether or not it changes code, the message must contain:
 
 - what the pass examined;
-- what was found;
-- what was not found;
+- what was found — with `file:line`;
+- what was NOT found, when that is the result;
 - the evidence supporting the conclusion;
 - the disposition of each finding;
-- tests/checks that were run;
-- anything deliberately deferred to a later pass.
+- tests/checks that were run, with their before/after counts;
+- anything deliberately deferred to a later pass, and why.
 
-**Never use an empty commit as a substitute for the review artifact.** The commit should leave behind a durable record of what happened during the pass.
+Write the message for someone reading `git log` a year from now with no other context. A one-line message is not a record.
 
 ### Commit Ordering Is Mandatory
 
@@ -55,8 +51,8 @@ The following sequence is required for **every** pass:
 4. Record all findings and dispositions.
 5. Make only the changes permitted by that pass.
 6. Run the required post-change tests/checks.
-7. Create the pass's review artifact if necessary.
-8. Create **exactly one commit for that pass**.
+7. Write the pass's record into the commit message.
+8. Create **exactly one commit for that pass** — `--allow-empty` if it changed no code.
 9. Verify the commit exists and contains only that pass's work.
 10. **Only then may the next pass begin.**
 
@@ -172,7 +168,7 @@ Do not merge two passes into one commit. Do not fix something out of turn: if pa
 <what changed, and what was deliberately left alone>
 ```
 
-If a pass changes nothing, commit nothing — but still report the pass and its result.
+If a pass changes nothing, still commit — `git commit --allow-empty` — and put the pass's result in the message. The commit is how the pass is reported.
 
 ## Rules for every pass
 
@@ -182,6 +178,7 @@ If a pass changes nothing, commit nothing — but still report the pass and its 
 - Every finding gets a **disposition**: fixed, deferred with a reason, or rejected with a reason.
 - Never fix and refactor in the same commit.
 - Run the tests before and after each pass.
+- **Every "Produce:" below goes in that pass's commit message**, not into a file. The message is the only place a pass's findings live.
 - **Stop early and say so** if a pass invalidates the whole approach — a criterion that can't be implemented as designed, an operation that fundamentally can't be made idempotent. Reviewing seven more passes of code that's about to be rewritten buries the finding that mattered. The stopping pass must still produce its required individual commit, documenting the reason for the stop and which subsequent passes were not executed.
 
 ---
@@ -205,7 +202,7 @@ Do this cold — before the tests, before the ticket, before the call graph.
 - **Errors as documentation.** `raise ValueError("invalid")` tells a reader at 3am nothing.
 - **The diff itself reads.** Formatting churn mixed into logic, or a file move combined with edits, makes a diff unreviewable no matter how good the result is.
 
-**Produce:** your first-read summary plus the list of places it was wrong. That list is the finding set, and it's the only artifact here you cannot reconstruct later.
+**Produce:** your first-read summary plus the list of places it was wrong, in the commit message. That list is the finding set, and it's the only thing here you cannot reconstruct later.
 
 Behavior-preserving only. Renames, comments, guard clauses, extracted helpers. Tests pass unchanged. A readability fix that needs a behavior change is a finding for a later pass — log it, don't do it. Large structural moves: judge here, perform in pass 9.
 
@@ -557,6 +554,8 @@ When the change includes a migration, backfill, or new constraint. Constraints i
 ---
 
 ## Report at the end
+
+Write this as your closing message to the reader — do not commit it as a file. It is an index into the commits, which hold the detail.
 
 For each pass: the findings, their disposition, and the commit. Both gates need an explicit verdict. "No findings", "not applicable", and "deferred, and here's why" are all complete entries.
 
