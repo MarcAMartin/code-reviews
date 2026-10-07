@@ -151,7 +151,7 @@ Do not:
 The Git history itself must tell the story of the review:
 
 ```text
-REVIEW-1 → REVIEW-2 → REVIEW-3 → REVIEW-4 → ... → REVIEW-11
+REVIEW-1 → REVIEW-2 → REVIEW-3 → REVIEW-4 → ... → REVIEW-12
 ```
 
 A reviewer must be able to inspect any individual `REVIEW-n` commit and determine exactly what happened during that pass.
@@ -187,7 +187,7 @@ If a pass changes nothing, still commit — `git commit --allow-empty` — and p
 
 *Can someone who has never seen this code work out what it does — and be right?*
 
-The most important pass. Every later pass is bottlenecked on comprehension — you cannot spot a boundary error in a function you cannot follow. And the judgment is perishable: you only read this code for the first time once, and passes 2–10 will teach you how it works and destroy your ability to tell whether it was legible to begin with.
+The most important pass. Every later pass is bottlenecked on comprehension — you cannot spot a boundary error in a function you cannot follow. And the judgment is perishable: you only read this code for the first time once, and passes 2–12 will teach you how it works and destroy your ability to tell whether it was legible to begin with.
 
 Do this cold — before the tests, before the ticket, before the call graph.
 
@@ -204,11 +204,11 @@ Do this cold — before the tests, before the ticket, before the call graph.
 
 **Produce:** your first-read summary plus the list of places it was wrong, in the commit message. That list is the finding set, and it's the only thing here you cannot reconstruct later.
 
-Behavior-preserving only. Renames, comments, guard clauses, extracted helpers. Tests pass unchanged. A readability fix that needs a behavior change is a finding for a later pass — log it, don't do it. Large structural moves: judge here, perform in pass 9.
+Behavior-preserving only. Renames, comments, guard clauses, extracted helpers. Tests pass unchanged. A readability fix that needs a behavior change is a finding for a later pass — log it, don't do it. Large structural moves: judge here, perform in pass 10.
 
 ### Gate — this pass stops the review
 
-RETURN the change and do not run passes 2–10 if:
+RETURN the change and do not run passes 2–12 if:
 
 1. Your first-read summary was wrong about *what the change does* — its purpose or primary effect, not a detail.
 2. You could not write a summary without first reading the tests, ticket, or call graph.
@@ -485,11 +485,46 @@ Behavior-preserving. Tests pass unchanged. If a test has to change, it isn't a s
 
 ---
 
-## Pass 11 — Test Quality and Diff Coverage · `[REVIEW-11][tests]`
+## Pass 11 — Linter · `[REVIEW-11][lint]`
+
+*Does the changed code pass the project's own linter, run the way CI runs it?*
+
+Late on purpose. Passes 1–10 and the situational passes all change code, so a lint run before them is already out of date by the time they finish. It runs before pass 12 because coverage is measured against the final diff, and lint fixes are part of that diff.
+
+### Run what CI runs
+
+- Find the real command instead of guessing it. Check the CI workflow, `package.json` scripts, the lint-staged or pre-commit config, and the `Makefile`. Use the repo's config and the repo's linter version. A linter run with your own defaults is linting a different project.
+- Include formatters in check mode (`prettier --check`, `black --check`, `gofmt -l`). If the pre-commit hook or CI would rewrite a file, that is a failure even when the linter reports zero errors.
+- Include the type checker if CI runs one as part of lint (`tsc --noEmit`, `mypy`).
+- If the linter can't run (missing deps, a broken config), that is a finding. N/A means only that the project has no linter configured. Record what you checked to establish that.
+
+### Scope to the diff
+
+```bash
+git diff --name-only --diff-filter=ACMR <base>...HEAD
+```
+
+Lint those files, then sort every result into one of two buckets:
+
+- **On touched lines:** added or modified in this diff. These are this change's findings. Each one gets fixed or gets a written exception.
+- **Pre-existing:** on lines the diff didn't touch. Count them and leave them alone. Fixing them is formatting churn in code this change doesn't own, which pass 1 calls unreviewable. Exception: if CI lints whole files (lint-staged usually does), a pre-existing error in a touched file fails the build anyway. Fix it here and say so.
+
+### Fixing
+
+- Use autofix only for mechanical rules: formatting, import order, quote style. Read the autofix diff before committing it.
+- Some lint fixes change behavior, for example `eqeqeq` (`==` → `===`), `no-floating-promises` (adding an `await`) and `radix`. Treat each one as a behavior change. Run the tests, and record it as its own finding. It may be a real bug the earlier passes missed, so name the pass that should have caught it.
+- **Suppressions are findings.** Every new `eslint-disable`, `# noqa`, `@ts-ignore` or `//nolint` needs a written reason in the commit message. A file-level disable added only to make the pass green is not a fix.
+- Never loosen the linter config to make the diff pass.
+
+**Produce:** the exact commands run, the files linted, and before/after counts split into touched lines and pre-existing. List each fix and whether it preserved behavior, and each suppression with its reason. The bar is zero lint errors on touched lines. Each one that remains needs its own written exception.
+
+---
+
+## Pass 12 — Test Quality and Diff Coverage · `[REVIEW-12][tests]`
 
 *Is every touched line covered — and does any of those tests actually check anything?*
 
-Last, because coverage can only be measured against the final diff, and pass 9 just deleted code.
+Last, because coverage can only be measured against the final diff, and passes 10 and 11 just changed it.
 
 ### Coverage: 100% of the touched lines
 
@@ -519,13 +554,13 @@ Uncovered lines need a written exception, one per line. "Hard to test" is not an
 
 **Produce:** the diff-coverage number with every uncovered line named, plus the mutation results — which lines you broke and whether a test caught each.
 
-This pass gates too. If a touched line is uncovered without a written exception, or a mutated line survived without turning a test red, the change is not reviewed — however clean passes 1–10 were.
+This pass gates too. If a touched line is uncovered without a written exception, or a mutated line survived without turning a test red, the change is not reviewed — however clean passes 1–11 were.
 
 ---
 
 ## Situational passes
 
-Run these when they apply, before pass 11.
+Run these when they apply, before pass 11, so the linter and the coverage check both see their changes.
 
 ### `[REVIEW-A][security]`
 
@@ -571,5 +606,6 @@ For each pass: the findings, their disposition, and the commit. Both gates need 
 [REVIEW-A][security]      N/A — no auth, parsing, or query changes.  <sha>
 [REVIEW-9][reusability]  Reused existing RetryPolicy rather than adding a duplicate.  <sha>
 [REVIEW-10][simplicity]  Deleted unused abstraction (one impl, one caller).  <sha>
-[REVIEW-11][tests]        GATE: PASS. Diff coverage 100% (47/47 lines, 12/12 branches). Mutated 6, all caught.  <sha>
+[REVIEW-11][lint]         eslint + prettier --check on 6 touched files. Touched lines 4 → 0 (2 autofixed, 1 eqeqeq behavior fix + test, 1 justified disable). 9 pre-existing left alone.  <sha>
+[REVIEW-12][tests]        GATE: PASS. Diff coverage 100% (47/47 lines, 12/12 branches). Mutated 6, all caught.  <sha>
 ```
