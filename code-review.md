@@ -1,6 +1,160 @@
 # Code Review
 
-Run every pass below, in order. One pass at a time, to completion, with its own commit — its own findings, its own test run, its own labelled commit — before starting the next.
+Run every pass below, in order. One pass at a time, to completion, with its own individual commit — its own findings, its own test run, and its own labelled commit — before starting the next.
+
+## Mandatory Commit Discipline
+
+**Every pass MUST result in exactly one individual commit. No exceptions.**
+
+This requirement applies even when:
+
+- the pass finds no bugs;
+- the pass makes no code changes;
+- the pass is not applicable;
+- the pass only produces findings that are deliberately deferred;
+- the pass only produces a comment documenting an observation, investigation, or conclusion;
+- the pass determines that an existing implementation is correct;
+- the pass produces only tests;
+- the pass is stopped early by a gate.
+
+**Do not skip a commit because there is "nothing to commit." There must still be a commit recording the completion and result of the pass.**
+
+**The commit message is the record.** Do not write review documents into the repository — no `docs/review/`, no `REVIEW-n.md`, no report file. A file duplicating the commit message is a second copy to keep in sync, it detaches from the change the moment anyone cherry-picks or rebases, and it goes stale against the diff sitting next to it. `git log <base>..HEAD` is the review.
+
+If a pass produces no source-code change, commit anyway:
+
+```bash
+git commit --allow-empty -F -
+```
+
+An empty commit is the correct mechanism here, not a loophole — the message is the deliverable, and there is nothing else the pass needed to leave behind.
+
+Whether or not it changes code, the message must contain:
+
+- what the pass examined;
+- what was found — with `file:line`;
+- what was NOT found, when that is the result;
+- the evidence supporting the conclusion;
+- the disposition of each finding;
+- tests/checks that were run, with their before/after counts;
+- anything deliberately deferred to a later pass, and why.
+
+Write the message for someone reading `git log` a year from now with no other context. A one-line message is not a record.
+
+### Commit Ordering Is Mandatory
+
+The following sequence is required for **every** pass:
+
+1. Start the pass.
+2. Perform the pass completely.
+3. Run the required tests/checks.
+4. Record all findings and dispositions.
+5. Make only the changes permitted by that pass.
+6. Run the required post-change tests/checks.
+7. Write the pass's record into the commit message.
+8. Create **exactly one commit for that pass** — `--allow-empty` if it changed no code.
+9. Verify the commit exists and contains only that pass's work.
+10. **Only then may the next pass begin.**
+
+Do not begin pass `N+1` while pass `N` has uncommitted work.
+
+Do not accumulate changes from multiple passes and commit them together.
+
+Do not amend a previous pass's commit with findings or fixes discovered during a later pass. If a later pass discovers something that belongs to an earlier pass, record it as a finding in the current pass and follow its disposition rules.
+
+### No Skipping
+
+**Every listed pass must be executed and committed.**
+
+A pass may be:
+
+- `PASS` — reviewed and no blocking findings remain;
+- `N/A` — the pass genuinely does not apply;
+- `DEFERRED` — a finding is intentionally left for a later pass, with the reason documented;
+- `RETURN` — a gate requires the review to stop.
+
+None of these statuses permits skipping the commit.
+
+For example, this is valid:
+
+```text
+[REVIEW-7][accuracy] N/A — no numeric logic is present in this change.
+```
+
+That still requires a commit documenting that determination.
+
+This is also valid:
+
+```text
+[REVIEW-3][scale-honesty] No findings.
+Expected production N: unknown; no production volume data was supplied.
+Checked all collection construction and external-call loops.
+```
+
+That still requires a commit.
+
+This is **not** valid:
+
+```text
+Pass 3 doesn't seem relevant, so skip it.
+```
+
+### Findings Must Not Be Lost
+
+If a pass produces even a single observation, it must be recorded.
+
+A finding does **not** need to result in a code change.
+
+For example:
+
+```text
+Finding:
+`foo.py:142` performs an unbounded read.
+
+Disposition:
+Deferred to Pass 9 because the current pass is restricted to
+scale analysis and changing the data-loading abstraction would
+constitute a structural simplification.
+
+Commit:
+[REVIEW-3][scale-honesty] Document unbounded export read
+```
+
+Likewise, if the conclusion is that something is correct, document the evidence:
+
+```text
+Finding:
+None.
+
+Evidence:
+`foo.py:142-168` was traced for empty, single-item, and
+10,000-item inputs. The collection is paginated before being
+materialized.
+
+Commit:
+[REVIEW-3][scale-honesty] Record scale review
+```
+
+### Commit Isolation
+
+Each commit must represent **one and only one pass**.
+
+Do not:
+
+- fix a Pass 6 finding during Pass 3;
+- include Pass 4 changes in the Pass 3 commit;
+- combine two passes because their changes touch the same files;
+- squash the review commits afterward;
+- amend an earlier review commit with later findings;
+- hide review findings exclusively in the final report.
+
+The Git history itself must tell the story of the review:
+
+```text
+REVIEW-1 → REVIEW-2 → REVIEW-3 → REVIEW-4 → ... → REVIEW-12 → REVIEW-13
+```
+
+A reviewer must be able to inspect any individual `REVIEW-n` commit and determine exactly what happened during that pass.
 
 Do not merge two passes into one commit. Do not fix something out of turn: if pass 3 makes you notice a boundary bug, write it down and handle it in pass 6.
 
@@ -14,7 +168,7 @@ Do not merge two passes into one commit. Do not fix something out of turn: if pa
 <what changed, and what was deliberately left alone>
 ```
 
-If a pass changes nothing, commit nothing — but still report the pass and its result.
+If a pass changes nothing, still commit — `git commit --allow-empty` — and put the pass's result in the message. The commit is how the pass is reported.
 
 ## Rules for every pass
 
@@ -24,7 +178,8 @@ If a pass changes nothing, commit nothing — but still report the pass and its 
 - Every finding gets a **disposition**: fixed, deferred with a reason, or rejected with a reason.
 - Never fix and refactor in the same commit.
 - Run the tests before and after each pass.
-- **Stop early and say so** if a pass invalidates the whole approach — a criterion that can't be implemented as designed, an operation that fundamentally can't be made idempotent. Reviewing seven more passes of code that's about to be rewritten buries the finding that mattered.
+- **Every "Produce:" below goes in that pass's commit message**, not into a file. The message is the only place a pass's findings live.
+- **Stop early and say so** if a pass invalidates the whole approach — a criterion that can't be implemented as designed, an operation that fundamentally can't be made idempotent. Reviewing seven more passes of code that's about to be rewritten buries the finding that mattered. The stopping pass must still produce its required individual commit, documenting the reason for the stop and which subsequent passes were not executed.
 
 ---
 
@@ -32,7 +187,7 @@ If a pass changes nothing, commit nothing — but still report the pass and its 
 
 *Can someone who has never seen this code work out what it does — and be right?*
 
-The most important pass. Every later pass is bottlenecked on comprehension — you cannot spot a boundary error in a function you cannot follow. And the judgment is perishable: you only read this code for the first time once, and passes 2–10 will teach you how it works and destroy your ability to tell whether it was legible to begin with.
+The most important pass. Every later pass is bottlenecked on comprehension — you cannot spot a boundary error in a function you cannot follow. And the judgment is perishable: you only read this code for the first time once, and passes 2–12 will teach you how it works and destroy your ability to tell whether it was legible to begin with.
 
 Do this cold — before the tests, before the ticket, before the call graph.
 
@@ -44,17 +199,17 @@ Do this cold — before the tests, before the ticket, before the call graph.
 - **Control flow you can hold in your head.** Nesting depth, pyramids that guard clauses would flatten, loops with several exits, flags steering a branch a hundred lines away.
 - **Comments.** A comment explaining *what* means the code should be clearer — fix the code, delete the comment. A *why* comment is valuable — keep it, verify it's still true. A missing *why* on a non-obvious decision is itself a finding. A stale comment is worse than none.
 - **Implicit knowledge.** Undocumented invariants, magic numbers, required call ordering, assumptions about the caller. Each is a trap for the next person.
-- **Constants that depend on each other.** For example, a lease that must be shorter than a window, or a threshold set at three intervals. If each is its own literal and only a comment ties them together, changing one silently breaks the others. Derive them from one source in code. Judge here, perform in pass 9.
+- **Constants that depend on each other.** For example, a lease that must be shorter than a window, or a threshold set at three intervals. If each is its own literal and only a comment ties them together, changing one silently breaks the others. Derive them from one source in code. Judge here, perform in pass 10.
 - **Errors as documentation.** `raise ValueError("invalid")` tells a reader at 3am nothing.
 - **The diff itself reads.** Formatting churn mixed into logic, or a file move combined with edits, makes a diff unreviewable no matter how good the result is.
 
-**Produce:** your first-read summary plus the list of places it was wrong. That list is the finding set, and it's the only artifact here you cannot reconstruct later.
+**Produce:** your first-read summary plus the list of places it was wrong, in the commit message. That list is the finding set, and it's the only thing here you cannot reconstruct later.
 
-Behavior-preserving only. Renames, comments, guard clauses, extracted helpers. Tests pass unchanged. A readability fix that needs a behavior change is a finding for a later pass — log it, don't do it. Large structural moves: judge here, perform in pass 9.
+Behavior-preserving only. Renames, comments, guard clauses, extracted helpers. Tests pass unchanged. A readability fix that needs a behavior change is a finding for a later pass — log it, don't do it. Large structural moves: judge here, perform in pass 10.
 
 ### Gate — this pass stops the review
 
-RETURN the change and do not run passes 2–10 if:
+RETURN the change and do not run passes 2–12 if:
 
 1. Your first-read summary was wrong about *what the change does* — its purpose or primary effect, not a detail.
 2. You could not write a summary without first reading the tests, ticket, or call graph.
@@ -213,7 +368,114 @@ The second arithmetic pass — pass 7 checks the numbers the code produces, this
 
 ---
 
-## Pass 9 — Simplicity · `[REVIEW-9][simplicity]`
+## Pass 9 — Reusability and Standards · `[REVIEW-9][reusability]`
+
+*Before adding a new abstraction, utility, helper, pattern, or dependency, did you first look for an existing standard, function, component, or established pattern that should be reused?*
+
+This pass exists to prevent the codebase from accumulating multiple ways to solve the same problem. **Our existing standards and functions take priority over inventing a new implementation.** A new abstraction is justified only when the existing one cannot reasonably satisfy the requirement.
+
+### Repository-First Reuse
+
+Before creating something new:
+
+- Search the repository for an existing function, helper, service, utility, component, hook, module, abstraction, or pattern that already solves the problem.
+- Check the project's established conventions and standards before choosing an implementation.
+- Prefer an existing internal function over writing an equivalent local implementation.
+- Prefer an existing shared abstraction over creating a one-off helper.
+- Prefer the project's existing libraries and dependencies over adding another dependency that provides overlapping functionality.
+- Follow existing naming, error-handling, logging, validation, configuration, and data-access conventions.
+- Check nearby code and analogous implementations, not just exact name matches. The right reusable pattern may have a different name.
+- Search for existing tests before adding new test utilities or fixtures.
+- If an existing function is close but insufficient, determine whether it should be extended rather than duplicated.
+- Do not create a new abstraction merely because the existing one has a slightly different interface or requires a small adapter.
+- If a new abstraction is genuinely necessary, document why the existing standard or function could not be reused.
+
+### Duplication
+
+Look specifically for:
+
+- New code duplicating an existing utility.
+- Reimplemented validation that already exists elsewhere.
+- Repeated API, database, HTTP, retry, logging, parsing, formatting, or error-handling logic.
+- Multiple implementations of the same business rule.
+- New constants or configuration values that duplicate existing ones.
+- New wrappers around a dependency already wrapped by an internal standard.
+- A new helper whose behavior substantially overlaps an existing helper.
+- New test setup that duplicates existing fixtures, factories, builders, or harnesses.
+- A new dependency introduced solely to perform work the codebase already supports.
+
+### Standards Take Priority
+
+If the repository has an established standard, use it unless there is a documented reason not to.
+
+Examples:
+
+```text
+Existing validation utility
+        ↓
+Use it
+
+Existing date/time utility
+        ↓
+Use it
+
+Existing API client
+        ↓
+Use it
+
+Existing logging abstraction
+        ↓
+Use it
+
+Existing error type / error handler
+        ↓
+Use it
+
+Existing database/repository pattern
+        ↓
+Use it
+```
+
+Do not introduce a competing implementation simply because it is personally preferred, more familiar, or easier to write locally.
+
+### Produce
+
+For every new function, helper, abstraction, dependency, or pattern introduced by the change, record:
+
+```text
+New thing:
+<name and location>
+
+Existing alternatives searched:
+<functions, utilities, modules, standards, or patterns examined>
+
+Why they were not reused:
+<specific reason>
+
+Decision:
+<reused / extended / adapted / intentionally new>
+
+Evidence:
+<searches or references supporting the decision>
+```
+
+If nothing new was introduced:
+
+```text
+Result:
+No new abstractions or overlapping implementations.
+
+Repository reuse:
+<what existing standards/functions were used>
+```
+
+A finding is required when a new implementation duplicates an existing capability without a documented reason.
+
+**Behavior-preserving reuse is preferred.** If reusing or extending an existing function would require a behavior change, record that as a finding and defer the behavior change to the appropriate pass rather than quietly changing the shared implementation here.
+
+---
+
+## Pass 10 — Simplicity · `[REVIEW-10][simplicity]`
 
 *What can be deleted?*
 
@@ -233,11 +495,49 @@ Behavior-preserving. Tests pass unchanged. If a test has to change, it isn't a s
 
 ---
 
-## Pass 10 — Test Quality and Diff Coverage · `[REVIEW-10][tests]`
+## Pass 11 — Linter · `[REVIEW-11][lint]`
+
+*Does the changed code pass the project's own linter, run the way CI runs it?*
+
+Late on purpose. Passes 1–10 and the situational passes all change code, so a lint run before them is already out of date by the time they finish. It runs before pass 12 because coverage is measured against the final diff, and lint fixes are part of that diff.
+
+### Run what CI runs
+
+- Find the real command instead of guessing it. Check the CI workflow, `package.json` scripts, the lint-staged or pre-commit config, and the `Makefile`. Use the repo's config and the repo's linter version. A linter run with your own defaults is linting a different project.
+- Include formatters in check mode (`prettier --check`, `black --check`, `gofmt -l`). If the pre-commit hook or CI would rewrite a file, that is a failure even when the linter reports zero errors.
+- Include the type checker if CI runs one as part of lint (`tsc --noEmit`, `mypy`).
+- If the linter can't run (missing deps, a broken config), that is a finding. N/A means only that the project has no linter configured. Record what you checked to establish that.
+- **Afterwards, `git diff HEAD` must be empty.** Run the CI command from the directory CI runs it in. lint-staged run that way (`lint-staged --diff="origin/<base>...HEAD"`) exits non-zero with "prevented an empty git commit" when it had nothing to change. That is the clean result; the empty diff is the check.
+- **Every app the change touches, each with its own config.** In a monorepo one change can span apps with different linters, and one may have no CI lint job at all. Lint it with its own `lint` script and type checker anyway.
+- **Every branch the change ships on.** Cherry-picks land on different bases, so lint each one. Don't infer one branch's result from another's.
+
+### Scope to the diff
+
+```bash
+git diff --name-only --diff-filter=ACMR <base>...HEAD
+```
+
+Lint those files, then sort every result into one of two buckets:
+
+- **On touched lines:** added or modified in this diff. These are this change's findings. Each one gets fixed or gets a written exception.
+- **Pre-existing:** on lines the diff didn't touch. Count them and leave them alone. Fixing them is formatting churn in code this change doesn't own, which pass 1 calls unreviewable. Exception: if CI lints whole files (lint-staged usually does), a pre-existing error in a touched file fails the build anyway. Fix it here and say so. Check the CI config before sorting. A file an earlier review pass touched for the first time (adding a test to an old spec, say) brings its old errors into the diff with it.
+
+### Fixing
+
+- Use autofix only for mechanical rules: formatting, import order, quote style. Read the autofix diff before committing it.
+- Some lint fixes change behavior, for example `eqeqeq` (`==` → `===`), `no-floating-promises` (adding an `await`) and `radix`. Treat each one as a behavior change. Run the tests, and record it as its own finding. It may be a real bug the earlier passes missed, so name the pass that should have caught it.
+- **Suppressions are findings.** Every new `eslint-disable`, `# noqa`, `@ts-ignore` or `//nolint` needs a written reason in the commit message. A file-level disable added only to make the pass green is not a fix.
+- Never loosen the linter config to make the diff pass.
+
+**Produce:** the exact commands run, the files linted, and before/after counts split into touched lines and pre-existing. List each fix and whether it preserved behavior, and each suppression with its reason. The bar is zero lint errors on touched lines. Each one that remains needs its own written exception.
+
+---
+
+## Pass 12 — Test Quality and Diff Coverage · `[REVIEW-12][tests]`
 
 *Is every touched line covered — and does any of those tests actually check anything?*
 
-Last of the numbered passes, because coverage can only be measured against the final diff, and pass 9 just deleted code. (The General Pass that follows re-runs this pass on anything it changes.)
+Last of the numbered passes, because coverage can only be measured against the final diff, and passes 10 and 11 just changed it. (The General Pass that follows re-runs this pass, and pass 11, on anything it changes.)
 
 ### Coverage: 100% of the touched lines
 
@@ -271,32 +571,13 @@ Uncovered lines need a written exception, one per line. "Hard to test" is not an
 
 **Produce:** the diff-coverage number with every uncovered line named, plus the mutation results — which lines you broke and whether a test caught each.
 
-This pass gates too. If a touched line is uncovered without a written exception, or a mutated line survived without turning a test red, the change is not reviewed — however clean passes 1–9 were.
-
----
-
-## Lint — Every Changed File, the Way CI Runs It · `[REVIEW-L][lint]`
-
-*Would the change pass the repo's lint gate as it stands right now?*
-
-Right after pass 10. By now the review has added a commit per pass on top of the original change, and none of them were linted as a whole. Lint all of it before the change goes back. The General Pass re-runs this step on anything it changes, so the review ends lint-clean.
-
-- **Run what CI runs.** Same tool, same config, same file set, same working directory. Read the workflow file rather than guessing. If CI runs `lint-staged --diff="origin/<base>...HEAD"`, run exactly that. If it runs eslint and prettier over the changed files, run those.
-- **Whole files, not changed lines.** Touching a file brings its existing errors into the change, and a file-level linter fails on them. "Those errors predate the change" is not a pass if the gate fails on them. Fix them.
-- **A rewrite is a failure.** If a formatter or `--fix` changes anything, the change wasn't clean. After running it, `git diff HEAD` must be empty, then commit what it rewrote.
-- **Every app the change touches, with its own config.** Include the typecheck where the repo has one (`tsc --noEmit`).
-- **Every branch the change ships on.** Cherry-picks land on different bases, so lint each one; don't infer it from another.
-- **Suppressions are findings.** A new `eslint-disable`, `@ts-ignore` or ignore-file entry needs a written reason, or it isn't a fix.
-
-Formatting-only fixes go in this step's own commit, never mixed with a pass's fix. Run the tests after it.
-
-**Produce:** the exact commands, per app and per branch, each with 0 errors and 0 rewrites. If any error is left, give the rule, the file and line, and the reason.
+This pass gates too. If a touched line is uncovered without a written exception, or a mutated line survived without turning a test red, the change is not reviewed — however clean passes 1–11 were.
 
 ---
 
 ## Situational passes
 
-Run these when they apply, before pass 10.
+Run these when they apply, before pass 11, so the linter and the coverage check both see their changes.
 
 ### `[REVIEW-A][security]`
 
@@ -331,11 +612,11 @@ When the change includes a migration, backfill, or new constraint. Constraints i
 
 ---
 
-## General Pass — Completion and Bugs · `[REVIEW-11][general]`
+## General Pass — Completion and Bugs · `[REVIEW-13][general]`
 
 *If this shipped right now, what would the first bug report be?*
 
-The final step, after pass 10 and every situational pass. The other passes each look through one lens. This one reads the whole final diff, review commits included, top to bottom one more time, for two things: is the change *finished*, and is anything still *wrong*. It catches what fell between the lenses.
+The final pass, after pass 12. The other passes each look through one lens. This one reads the whole final diff, review commits included, top to bottom one more time, for two things: is the change *finished*, and is anything still *wrong*. It catches what fell between the lenses.
 
 Read the review's own commits as hard as the original. Fixes written late in a review get the least scrutiny of any code in the change, and a fix in one pass can quietly break what an earlier pass established.
 
@@ -344,7 +625,7 @@ Read the review's own commits as hard as the original. Fixes written late in a r
 - **Leftovers:** `TODO`, `FIXME`, debug logging, commented-out code, hardcoded test values, a temporary flag left on.
 - **Half-applied changes:** a rename that still has the old name in a test, a doc, a config, an error message or a log line. A new field written in one place but not read, or read but never written. Every call site updated, not just the one you were looking at.
 - **Everything that ships with it:** README, docs, PR description, changelog, config and environment variables, migrations, exports, build and package entries. Each matches the *final* code, not the code as it was before the review changed it.
-- **Claims the review made:** comments and commit messages written in earlier passes that later passes made untrue, such as a comment justifying code that pass 9 deleted.
+- **Claims the review made:** comments and commit messages written in earlier passes that later passes made untrue, such as a comment justifying code that pass 10 deleted.
 - **Repo rules about what the change adds:** build config comments, design-pattern docs, CI path filters. A new kind of file (a DB-backed test, a worker, a migration) may come with rules elsewhere in the repo and checks to re-run. Find them, run them, and update any count or claim the change made stale.
 - **Loose ends:** every finding marked "deferred" has a reason and a home (a ticket or a line in the PR). Nothing was fixed on one branch, or in one repo, and forgotten on another.
 
@@ -360,7 +641,7 @@ The same goes for what reviewers find after the review is handed back. Validate 
 
 Fixes made in answer to review comments get the full passes too, not only tests: especially 4 (survivability), 6 (boundaries), 7 (time) and B (observability). A redesign that answers one comment can open new failure paths. The first fix to one PR's claim lease introduced three new bugs, all caught only on re-review.
 
-Anything this pass changes goes through pass 10 again for the touched lines: covered, both branches taken, and at least one mutation caught. Then it goes through the lint step again. Run the full suite before and after.
+Anything this pass changes goes through pass 11 and pass 12 again for the touched lines: lint-clean, covered, both branches taken, and at least one mutation caught. Run the full suite before and after. Like every pass it ends in its own commit (`--allow-empty` if it changed nothing), and the Produce below is that commit's message.
 
 **Produce:** the completion checklist with every item marked done, not applicable, or found; then the bug list, each with location, failure and disposition. "Read the whole final diff and found nothing" is a legitimate result, but say how you read it: alone, or with a fresh reader.
 
@@ -368,20 +649,23 @@ Anything this pass changes goes through pass 10 again for the touched lines: cov
 
 ## Report at the end
 
+Write this as your closing message to the reader — do not commit it as a file. It is an index into the commits, which hold the detail.
+
 For each pass: the findings, their disposition, and the commit. Both gates need an explicit verdict. "No findings", "not applicable", and "deferred, and here's why" are all complete entries.
 
 ```
 [REVIEW-1][readability]   GATE: PASS. Summary wrong about retry scope. 4 renames, 2 why-comments.  <sha>
 [REVIEW-2][acceptance]    3 findings, 3 fixed.  <sha>
 [REVIEW-3][scale-honesty] N+1 on export, fixed. Honesty: clean.  <sha>
-[REVIEW-4][survivability] No findings. Verified by re-running from a killed state.
+[REVIEW-4][survivability] No findings. Verified by re-running from a killed state.  <sha>
 [REVIEW-5][empirical]     N+1 under 50k rows, cap at the boundary. Both held. Regression test added.  <sha>
 [REVIEW-6][boundaries]    Cap enforced one batch late. Fixed.  <sha>
-[REVIEW-7][accuracy]      Deferred — no numeric logic in this change.
+[REVIEW-7][accuracy]      N/A — no numeric logic in this change.  <sha>
 [REVIEW-8][cost]          $0.11/run, ~$340/mo at 100k runs. Embedding calls batched 1→50.  <sha>
-[REVIEW-A][security]      Not applicable — no auth, parsing, or query changes.
-[REVIEW-9][simplicity]    Deleted RetryPolicy (one impl, one caller).  <sha>
-[REVIEW-10][tests]        GATE: PASS. Diff coverage 100% (47/47 lines, 12/12 branches). Mutated 6, all caught.  <sha>
-[REVIEW-L][lint]          lint-staged over origin/base...HEAD, both apps, all 3 branches: 0 errors, 0 rewrites. Reformatted 1 touched file.  <sha>
-[REVIEW-11][general]      Completion: README still named the old flag, fixed. Bugs: one, a missing await in the retry fix from pass 4. Re-covered.  <sha>
+[REVIEW-A][security]      N/A — no auth, parsing, or query changes.  <sha>
+[REVIEW-9][reusability]  Reused existing RetryPolicy rather than adding a duplicate.  <sha>
+[REVIEW-10][simplicity]  Deleted unused abstraction (one impl, one caller).  <sha>
+[REVIEW-11][lint]         eslint + prettier --check on 6 touched files. Touched lines 4 → 0 (2 autofixed, 1 eqeqeq behavior fix + test, 1 justified disable). 9 pre-existing left alone.  <sha>
+[REVIEW-12][tests]        GATE: PASS. Diff coverage 100% (47/47 lines, 12/12 branches). Mutated 6, all caught.  <sha>
+[REVIEW-13][general]      Completion: README still named the old flag, fixed. Bugs: one, a missing await in the retry fix from pass 4. Re-covered and re-linted.  <sha>
 ```
